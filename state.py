@@ -5,8 +5,8 @@ import random
 class Player:
     def __init__(self, name):
         self.hand = pydealer.Stack()
-        self.set_meld = pydealer.Stack()
-        self.hand_meld = pydealer.Stack()
+        self.set_meld = []
+        self.run_meld = []
         self.name = name
         self.beg_count = 0
         self.score = 0
@@ -176,7 +176,7 @@ class DamGame:
         card = self.players[player_i].hand.get(card_i)
         self.discard_pile.add(card)
 
-        # If this player has won
+        # If the round is over
         if len(self.players[player_i].hand) < 1:
             self.increment_round()
         else:
@@ -232,22 +232,28 @@ class DamGame:
 
         # Add sets to meld
         set_meld = self.players[player_i].set_meld
-        for i in all_sets:
-            set_meld.add(cur_hand.get(i))
+        for s in sets:
+            cards = pydealer.Stack()
+            for i in s:
+                cards.add(cur_hand.get(i))
+            set_meld.append(cards)
 
         # Add runs to meld
         run_meld = self.players[player_i].run_meld
-        for i in all_runs:
-            run_meld.add(cur_hand.get(i))
+        for r in runs:
+            cards = pydealer.Stack()
+            for i in r:
+                cards.add(cur_hand.get(i))
+            run_meld.append(cards)
 
     def raise_if_bad_sets(self, hand, sets, spec):
         n, size = spec
         if len(sets) != n:
             raise ValueError('Sets {} does not have proper number {}'.format(sets, n))
         for s in sets:
-            if len(s) < size:
-                raise ValueError('Set {} does not have at least {} cards'.format(s, size))
-            if len(set([hand[card_i].value for card_i in s])) > 0:
+            if len(s) != size:
+                raise ValueError('Set {} does not have exactly {} cards'.format(s, size))
+            if len(set([hand[card_i].value for card_i in s])) > 1:
                 raise ValueError('Set {} is not a valid set'.format(s))
 
     def raise_if_bad_runs(self, hand, runs, spec):
@@ -255,42 +261,37 @@ class DamGame:
         if len(runs) != n:
             raise ValueError('Runs {} does not have proper number {}'.format(runs, n))
         for r in runs:
-            if len(r) < size:
-                raise ValueError('Run {} does not have at least {} cards'.format(r, size))
+            if len(r) != size:
+                raise ValueError('Run {} does not have exactly {} cards'.format(r, size))
+
             # Create a list of card objects from the hand
             cards = [hand[card_i] for card_i in r]
-            # Get values, and remove wild cards
+
+            # Get values and ranks, and remove wild cards
             card_vals = [card.value for card in cards if not self.is_wild(card)]
+            card_suits = [card.suit for card in cards if not self.is_wild(card)]
+
+            # Check suits are all the same
+            if len(set(card_suits)) > 1:
+                raise ValueError('Run {} is not all the same suit'.format(r))
+
             # Num wild is num removed from cards to card_vals
             num_wild = len(card_vals) - len(cards)
             if num_wild > max_wild:
                 raise ValueError('Run {} has more than {} wild cards'.format(r, max_wild))
+
+            # Get card ranks
             card_ranks = [pydealer.DEFAULT_RANKS['values'][val] for val in card_vals]
+
             # card_ranks must not contain duplicates
             if len(card_ranks) != len(set(card_ranks)):
                 raise ValueError('Run {} contains duplicate values'.format(r))
-            # Get number of consecutive cards and width of gaps
-            consecutive, inner_wild = self.get_consecutive(card_ranks)
-            if inner_wild > max_wild or consecutive + num_wild - inner_wild > size:
-                raise ValueError('Run {} is not a valid run'.format(r))
 
-    def get_consecutive(nums):
-        # Assumes no duplicates
-        length = max(nums) - min(nums) + 1
-        exceptions = length - len(nums)
-        return (length, exceptions)
+            # Check number of cards spans the entire range
+            if len(cards) < max(card_ranks) - min(card_ranks):
+                raise ValueError('Run {} is not valid'.format(r))
 
-        # bad_count = 0
-        # for n in list(range(min(nums), max(nums) + 1)):
-        #     count = nums.count(n)
-        #     if count > 1:
-
-        # if len(set(nums)) != len(nums):
-        #     return False
-
-        # if sorted(nums) != list(range(min(nums), max(nums) + 1)
-
-    def score(hand):
+    def score(self, hand):
         for card in hand:
             rank = pydealer.DEFAULT_RANKS['values'][card.value]
             # Ace: 15 points
@@ -380,5 +381,7 @@ if __name__ == '__main__':
     print(game.players[0])
     game.draw_card_from_deck(0)
     print(game.players[0])
-    game.discard_card(0, 0)
-    print(game.players[0])
+    game.increment_round()
+    print(game)
+    # game.discard_card(0, 0)
+    # print(game.players[0])
